@@ -1,121 +1,88 @@
 package main
 
+import "math/big"
+
 var (
-	exactNumbers = map[uint]string{
-		0:  "null",
-		1:  "eins",
-		2:  "zwei",
-		3:  "drei",
-		4:  "vier",
-		5:  "fünf",
-		6:  "sechs",
-		7:  "sieben",
-		8:  "acht",
-		9:  "neun",
-		10: "zehn",
-		11: "elf",
-		12: "zwölf",
-		20: "zwanzig",
-		30: "dreißig",
+	exactNumbers = map[uint64]string{
+		0: "null", 1: "eins", 2: "zwei", 3: "drei", 4: "vier", 5: "fünf", 6: "sechs", 7: "sieben", 8: "acht", 9: "neun",
+		10: "zehn", 11: "elf", 12: "zwölf", 13: "dreizehn", 14: "vierzehn", 15: "fünfzehn", 16: "sechzehn", 17: "siebzehn",
+		18: "achtzehn", 19: "neunzehn", 20: "zwanzig", 30: "dreißig", 40: "vierzig", 50: "fünfzig", 60: "sechzig",
+		70: "siebzig", 80: "achtzig", 90: "neunzig",
 	}
 
-	reducedForm = map[uint]string{
-		1: "ein",
-		6: "sech",
-		7: "sieb",
-	}
-
-	undForm = map[uint]string{
-		1: "ein",
-	}
-
-	millionenForm = map[uint]string{
-		1: "eine",
+	numRanges = []numRange{
+		{start: big.NewInt(100), end: big.NewInt(999), one: "ein", singular: "hundert", plural: "hundert", joined: true},
+		{start: big.NewInt(1000), end: big.NewInt(999999), one: "ein", singular: "tausend", plural: "tausend", joined: true},
+		{start: big.NewInt(1000000), end: big.NewInt(999999999), one: "eine", singular: "Million", plural: "Millionen"},
+		{start: big.NewInt(1000000000), end: big.NewInt(999999999999), one: "eine", singular: "Milliarde", plural: "Milliarden"},
+		{start: big.NewInt(1000000000000), end: big.NewInt(999999999999999), one: "eine", singular: "Billion", plural: "Billionen"},
+		{start: big.NewInt(1000000000000000), end: big.NewInt(999999999999999999), one: "eine", singular: "Billiarde", plural: "Billiarden"},
+		{start: newBigInt("1000000000000000000"), end: newBigInt("999999999999999999999"), one: "eine", singular: "Trillion", plural: "Trillionen"},
+		{start: newBigInt("1000000000000000000000"), end: newBigInt("999999999999999999999999"), one: "eine", singular: "Trilliarde", plural: "Trilliarden"},
 	}
 )
 
-func reducedOrNormal(digit uint) string {
-	if val, ok := reducedForm[digit]; ok {
-		return val
-	}
-	return exactNumbers[digit]
+type numRange struct {
+	start    *big.Int
+	end      *big.Int
+	one      string
+	singular string
+	plural   string
+	joined   bool
 }
 
-func undFormOrNormal(digit uint) string {
-	if val, ok := undForm[digit]; ok {
-		return val
-	}
-	return exactNumbers[digit]
-}
-
-func millionenFormOrNormal(digit uint) string {
-	if val, ok := millionenForm[digit]; ok {
-		return val
-	}
-	return exactNumbers[digit]
+func newBigInt(num string) *big.Int {
+	bigint := big.NewInt(0)
+	bigint, _ = bigint.SetString(num, 10)
+	return bigint
 }
 
 // Ausschreiben converts a natural number to it's full written form in German
-func Ausschreiben(number uint) string {
+func Ausschreiben(bigint *big.Int) string {
+	number := bigint.Uint64()
 	if val, ok := exactNumbers[number]; ok {
 		return val
 	}
 
-	if number >= 13 && number <= 19 {
-		return reducedOrNormal(number-10) + "zehn"
-	}
-
-	tensRemainder := number % 10
-	tens := uint(number / 10)
-
-	if number >= 40 && number <= 90 && tensRemainder == 0 {
-		return reducedOrNormal(tens) + "zig"
-	}
-
-	if number > 20 && number < 100 && tensRemainder != 0 {
-		return undFormOrNormal(tensRemainder) + "und" + Ausschreiben(number-tensRemainder)
-	}
-
-	if number >= 100 && number <= 999 {
-		hundredsRemain := number % 100
-		hundreds := uint(number / 100)
-		tensFromRemainder := ""
-		if hundredsRemain != 0 {
-			tensFromRemainder = Ausschreiben(hundredsRemain)
+	tensRemainder := new(big.Int).Rem(bigint, big.NewInt(10))
+	if bigint.Cmp(big.NewInt(20)) > 0 && bigint.Cmp(big.NewInt(100)) < 0 && tensRemainder.Cmp(big.NewInt(0)) != 0 {
+		remainder := tensRemainder.Uint64()
+		remainderStr := exactNumbers[remainder]
+		if remainder == 1 {
+			remainderStr = "ein"
 		}
-		return undFormOrNormal(hundreds) + "hundert" + tensFromRemainder
+		return remainderStr + "und" + Ausschreiben(big.NewInt(int64(number-remainder)))
 	}
 
-	if number >= 1000 && number <= 999999 {
-		thousandsRemain := number % 1000
-		thousands := uint(number / 1000)
-		hundredsOfRemainder := ""
-		if thousandsRemain != 0 {
-			hundredsOfRemainder = Ausschreiben(thousandsRemain)
-		}
-		if number >= 1000 && number <= 9999 {
-			return undFormOrNormal(thousands) + "tausend" + hundredsOfRemainder
-		}
-		return Ausschreiben(thousands) + "tausend" + hundredsOfRemainder
-	}
+	for _, r := range numRanges {
+		if bigint.Cmp(r.start) >= 0 && bigint.Cmp(r.end) <= 0 {
+			remaining := new(big.Int).Rem(bigint, r.start)
+			numerator := new(big.Int).Div(bigint, r.start)
 
-	if number >= 1000000 && number <= 999999999 {
-		millionenRemain := number % 1000000
-		millionen := uint(number / 1000000)
-		s := ""
-		if millionen == 1 {
-			s += millionenFormOrNormal(millionen) + " Million"
-		} else {
-			s += Ausschreiben(millionen) + " Millionen"
-		}
-		if millionenRemain > 0 {
-			s += " " + Ausschreiben(millionenRemain)
-		}
-		return s
-	}
+			suffix := ""
+			if remaining.Cmp(big.NewInt(0)) != 0 {
+				suffix = Ausschreiben(remaining)
+			}
 
-	// 2003004005006007008009
-	// zwei Trilliarden drei Trillionen vier Billiarden fünf Billionen sechs Milliarden sieben Millionen achttausendneun
+			var numeratorStr, group string
+			if numerator.Cmp(big.NewInt(1)) == 0 {
+				numeratorStr, group = r.one, r.singular
+			} else {
+				numeratorStr, group = Ausschreiben(numerator), r.plural
+			}
+
+			var space = " "
+			if r.joined {
+				space = ""
+			}
+
+			inFull := numeratorStr + space + group
+			if len(suffix) > 0 {
+				inFull += space + suffix
+			}
+			return inFull
+		}
+	}
 
 	return ""
 }
